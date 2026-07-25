@@ -49,12 +49,15 @@ describe("embedded viewer layout", () => {
     );
   });
 
-  it("moves controls below the viewport at narrow widths", () => {
+  it("keeps controls beside the viewport at narrow widths", () => {
     expect(layoutCss).toMatch(
-      /@media \(max-width: 520px\)[\s\S]*\.app-embedded\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 44px;/,
+      /@media \(max-width: 520px\)[\s\S]*\.app-embedded\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 44px;[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*gap:\s*8px;[^}]*padding:\s*0 8px 0 0;/,
+    );
+    expect(layoutCss).not.toMatch(
+      /@media \(max-width: 520px\)[\s\S]*\.app-embedded \.toolbar\s*{[^}]*grid-row:\s*2;/,
     );
     expect(layoutCss).toMatch(
-      /@media \(max-width: 520px\)[\s\S]*\.app-embedded \.toolbar\s*{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2;/,
+      /@media \(max-width: 520px\)[\s\S]*\.app-embedded \.toolbar \.menu-popover\s*{[^}]*right:\s*60px;/,
     );
   });
 

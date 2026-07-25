@@ -393,65 +393,25 @@
 
 @media (max-width: 520px) {
   .app-embedded {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-rows: minmax(0, 1fr);
     gap: 8px;
-    padding: 0;
-  }
-
-  .app-embedded .main {
-    grid-column: 1;
-    grid-row: 1;
+    padding: 0 8px 0 0;
   }
 
   .app-embedded .toolbar {
-    grid-column: 1;
-    grid-row: 2;
-    align-self: end;
-    justify-self: center;
-    flex-direction: row;
-    width: max-content;
-    max-width: 100%;
-    height: 44px;
-    max-height: none;
-    padding: 6px;
-  }
-
-  .app-embedded .toolbar-left,
-  .app-embedded .toolbar-right,
-  .app-embedded .toolbar-actions {
-    flex-direction: row;
-    width: auto;
-  }
-
-  .app-embedded .toolbar-right {
-    padding-top: 0;
-    padding-left: 4px;
-    border-top: 0;
-    border-left: 1px solid var(--border-subtle);
+    max-height: calc(100dvh - 16px);
+    margin-top: 8px;
   }
 
   .app-embedded .toolbar .menu-popover {
     position: fixed;
-    top: auto;
-    right: 8px;
-    bottom: 60px;
+    top: 8px;
+    right: 60px;
+    bottom: 8px;
     left: 8px;
     width: auto;
-    max-height: calc(100dvh - 68px);
-  }
-
-  .app-embedded .toolbar .tbtn[data-tooltip]::after {
-    top: auto;
-    right: auto;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translate(-50%, 4px);
-  }
-
-  .app-embedded .toolbar .tbtn[data-tooltip]:hover::after,
-  .app-embedded .toolbar .tbtn[data-tooltip]:focus-visible::after {
-    transform: translate(-50%, 0);
+    max-height: none;
   }
 }
 
