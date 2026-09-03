@@ -22,15 +22,22 @@ function keyboardEvent(
 
 function keyboardHarness() {
   const keys: Array<{ keyCode: number; modifiers: number }> = [];
+  const shortcuts: Array<{
+    key: string;
+    keyCode: number;
+    modifiers: number;
+  }> = [];
   const text: string[] = [];
   const batcher = new SemanticKeyboardBatcher({
     delayMs: 16,
     onKey: (payload) => keys.push(payload),
+    onShortcut: (payload) => shortcuts.push(payload),
     onText: (value) => text.push(value),
   });
   return {
     batcher,
     keys,
+    shortcuts,
     text,
     translator: new SemanticKeyboardTranslator(batcher),
   };
@@ -69,6 +76,7 @@ describe("SemanticKeyboardTranslator", () => {
     const batcher = new SemanticKeyboardBatcher({
       delayMs: 16,
       onKey: ({ keyCode }) => operations.push(`key:${keyCode}`),
+      onShortcut: ({ key }) => operations.push(`shortcut:${key}`),
       onText: (value) => operations.push(`text:${value}`),
     });
     const translator = new SemanticKeyboardTranslator(batcher);
@@ -82,37 +90,35 @@ describe("SemanticKeyboardTranslator", () => {
     expect(operations).toEqual(["text:é", "key:80"]);
   });
 
-  it("types human-speed browser text as exact semantic HID keys", () => {
+  it("keeps human-speed printable input semantic on non-US devices", () => {
     vi.useFakeTimers();
     const { keys, text, translator } = keyboardHarness();
 
-    for (const character of "schaaf") {
+    for (const character of "aq4242") {
       translator.beforeInput("insertText", character);
       vi.advanceTimersByTime(120);
     }
 
-    expect(keys).toEqual(
-      [22, 6, 11, 4, 4, 9].map((keyCode) => ({ keyCode, modifiers: 0 })),
-    );
-    expect(text).toEqual([]);
+    expect(keys).toEqual([]);
+    expect(text).toEqual(["a", "q", "4", "2", "4", "2"]);
   });
 
-  it("derives the intended character independently of keyboard layout", () => {
-    const { keys, translator } = keyboardHarness();
+  it("batches browser-resolved characters independently of keyboard layout", () => {
+    vi.useFakeTimers();
+    const { keys, text, translator } = keyboardHarness();
 
     expect(translator.beforeInput("insertText", "@")).toBe(true);
     expect(translator.beforeInput("insertText", "a")).toBe(true);
     expect(translator.beforeInput("insertText", "A")).toBe(true);
+    vi.runAllTimers();
 
-    expect(keys).toEqual([
-      { keyCode: 31, modifiers: 1 },
-      { keyCode: 4, modifiers: 0 },
-      { keyCode: 4, modifiers: 1 },
-    ]);
+    expect(keys).toEqual([]);
+    expect(text).toEqual(["@aA"]);
   });
 
   it("uses browser-resolved casing without toggling remote Caps Lock", () => {
-    const { keys, translator } = keyboardHarness();
+    vi.useFakeTimers();
+    const { keys, text, translator } = keyboardHarness();
 
     expect(
       translator.keyDown(
@@ -125,11 +131,40 @@ describe("SemanticKeyboardTranslator", () => {
     ).toBe(false);
     expect(translator.beforeInput("insertText", "A")).toBe(true);
     expect(translator.beforeInput("insertText", "a")).toBe(true);
+    vi.runAllTimers();
 
-    expect(keys).toEqual([
-      { keyCode: 4, modifiers: 1 },
-      { keyCode: 4, modifiers: 0 },
-    ]);
+    expect(keys).toEqual([]);
+    expect(text).toEqual(["Aa"]);
+  });
+
+  it("sends logical shortcuts independently of browser and device layout", () => {
+    const { keys, shortcuts, translator } = keyboardHarness();
+
+    expect(
+      translator.keyDown(
+        keyboardEvent({ code: "KeyQ", key: "a", metaKey: true }),
+      ),
+    ).toBe(true);
+
+    expect(keys).toEqual([]);
+    expect(shortcuts).toEqual([{ key: "a", keyCode: 4, modifiers: 8 }]);
+  });
+
+  it("keeps shifted shortcut casing in the modifier flags", () => {
+    const { shortcuts, translator } = keyboardHarness();
+
+    expect(
+      translator.keyDown(
+        keyboardEvent({
+          code: "KeyW",
+          key: "Z",
+          metaKey: true,
+          shiftKey: true,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(shortcuts).toEqual([{ key: "z", keyCode: 29, modifiers: 9 }]);
   });
 
   it("commits composed Unicode once", () => {

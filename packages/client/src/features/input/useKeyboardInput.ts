@@ -10,6 +10,11 @@ import {
 interface UseKeyboardInputOptions {
   enabled: boolean;
   onKey: (payload: { keyCode: number; modifiers: number }) => void;
+  onShortcut: (payload: {
+    key: string;
+    keyCode: number;
+    modifiers: number;
+  }) => void;
   onText: (text: string) => void;
   onToggleSoftwareKeyboard?: () => void;
 }
@@ -17,17 +22,23 @@ interface UseKeyboardInputOptions {
 export function useKeyboardInput({
   enabled,
   onKey,
+  onShortcut,
   onText,
   onToggleSoftwareKeyboard,
 }: UseKeyboardInputOptions) {
   const sinkRef = useRef<HTMLTextAreaElement | null>(null);
   const onKeyRef = useRef(onKey);
+  const onShortcutRef = useRef(onShortcut);
   const onTextRef = useRef(onText);
   const onToggleSoftwareKeyboardRef = useRef(onToggleSoftwareKeyboard);
 
   useEffect(() => {
     onKeyRef.current = onKey;
   }, [onKey]);
+
+  useEffect(() => {
+    onShortcutRef.current = onShortcut;
+  }, [onShortcut]);
 
   useEffect(() => {
     onTextRef.current = onText;
@@ -49,6 +60,7 @@ export function useKeyboardInput({
     const keyboardSink = sink;
     const batcher = new SemanticKeyboardBatcher({
       onKey: (payload) => onKeyRef.current(payload),
+      onShortcut: (payload) => onShortcutRef.current(payload),
       onText: (text) => onTextRef.current(text),
     });
     const translator = new SemanticKeyboardTranslator(batcher);

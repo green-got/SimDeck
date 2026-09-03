@@ -75,8 +75,6 @@ pub async fn shutdown_all() {
 }
 
 pub async fn type_text(udid: &str, bundle_id: &str, text: &str) -> Result<(), String> {
-    let session = session_for(udid).await;
-    let mut session = session.lock().await;
     let request = json!({
         "command": "typeText",
         "bundleId": bundle_id,
@@ -85,14 +83,47 @@ pub async fn type_text(udid: &str, bundle_id: &str, text: &str) -> Result<(), St
     let request_timeout = Duration::from_millis(
         (3_000_u64 + text.chars().count() as u64 * 100).clamp(10_000, 30_000),
     );
+    run_command(udid, request, request_timeout, "XCTest could not type text").await
+}
+
+pub async fn type_key(
+    udid: &str,
+    bundle_id: &str,
+    key: &str,
+    modifiers: u32,
+) -> Result<(), String> {
+    if key.chars().count() != 1 {
+        return Err("Semantic key input requires exactly one character".to_string());
+    }
+    let request = json!({
+        "command": "typeKey",
+        "bundleId": bundle_id,
+        "key": key,
+        "modifiers": modifiers,
+    });
+    run_command(
+        udid,
+        request,
+        Duration::from_secs(10),
+        "XCTest could not type key",
+    )
+    .await
+}
+
+async fn run_command(
+    udid: &str,
+    request: Value,
+    request_timeout: Duration,
+    fallback_error: &str,
+) -> Result<(), String> {
+    let session = session_for(udid).await;
+    let mut session = session.lock().await;
 
     ensure_ready(udid, &mut session).await?;
     let port = session.port.ok_or("XCTest text runner has no port")?;
     match send_command(port, &request, request_timeout).await {
         Ok(response) if response.ok => Ok(()),
-        Ok(response) => Err(response
-            .error
-            .unwrap_or_else(|| "XCTest could not type text".to_string())),
+        Ok(response) => Err(response.error.unwrap_or_else(|| fallback_error.to_string())),
         Err(error) => {
             stop_session(&mut session).await;
             Err(error)
