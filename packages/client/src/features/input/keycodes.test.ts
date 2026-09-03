@@ -11,13 +11,12 @@ function keyboardEventLike(overrides: Partial<KeyboardEvent>): KeyboardEvent {
 }
 
 describe("keyCodeForKeyboardEvent", () => {
-  it("prefers the actual key value for printable characters as a USB HID usage", () => {
-    const event = keyboardEventLike({
-      code: "KeyQ",
-      key: "a",
-    });
+  it("maps a logical letter to the French AZERTY simulator layout", () => {
+    const qwerty = keyboardEventLike({ code: "KeyA", key: "a" });
+    const azerty = keyboardEventLike({ code: "KeyQ", key: "a" });
 
-    expect(keyCodeForKeyboardEvent(event)).toBe(4);
+    expect(keyCodeForKeyboardEvent(qwerty)).toBe(20);
+    expect(keyCodeForKeyboardEvent(azerty)).toBe(20);
   });
 
   it("maps shifted printable characters to their underlying key", () => {

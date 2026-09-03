@@ -92,23 +92,38 @@ describe("SemanticKeyboardTranslator", () => {
     }
 
     expect(keys).toEqual(
-      [22, 6, 11, 4, 4, 9].map((keyCode) => ({ keyCode, modifiers: 0 })),
+      [22, 6, 11, 20, 20, 9].map((keyCode) => ({ keyCode, modifiers: 0 })),
     );
     expect(text).toEqual([]);
   });
 
-  it("derives the intended character independently of keyboard layout", () => {
+  it("derives letters independently of the browser keyboard layout", () => {
     const { keys, translator } = keyboardHarness();
 
-    expect(translator.beforeInput("insertText", "@")).toBe(true);
-    expect(translator.beforeInput("insertText", "a")).toBe(true);
-    expect(translator.beforeInput("insertText", "A")).toBe(true);
+    expect(translator.keyDown(keyboardEvent({ code: "KeyA", key: "q" }))).toBe(
+      false,
+    );
+    expect(translator.beforeInput("insertText", "q")).toBe(true);
+    expect(translator.keyDown(keyboardEvent({ code: "KeyQ", key: "q" }))).toBe(
+      false,
+    );
+    expect(translator.beforeInput("insertText", "q")).toBe(true);
 
     expect(keys).toEqual([
-      { keyCode: 31, modifiers: 1 },
       { keyCode: 4, modifiers: 0 },
-      { keyCode: 4, modifiers: 1 },
+      { keyCode: 4, modifiers: 0 },
     ]);
+  });
+
+  it("uses semantic text for symbols whose modifiers vary by layout", () => {
+    vi.useFakeTimers();
+    const { keys, text, translator } = keyboardHarness();
+
+    expect(translator.beforeInput("insertText", "@")).toBe(true);
+    vi.runAllTimers();
+
+    expect(keys).toEqual([]);
+    expect(text).toEqual(["@"]);
   });
 
   it("uses browser-resolved casing without toggling remote Caps Lock", () => {
@@ -127,8 +142,8 @@ describe("SemanticKeyboardTranslator", () => {
     expect(translator.beforeInput("insertText", "a")).toBe(true);
 
     expect(keys).toEqual([
-      { keyCode: 4, modifiers: 1 },
-      { keyCode: 4, modifiers: 0 },
+      { keyCode: 20, modifiers: 1 },
+      { keyCode: 20, modifiers: 0 },
     ]);
   });
 

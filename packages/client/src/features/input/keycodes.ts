@@ -179,9 +179,25 @@ const KEY_TO_HID_USAGE: Record<string, number> = {
   ArrowUp: 82,
 };
 
-const SHIFTED_CHARACTERS = new Set(
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()_+{}|:"~<>?',
-);
+const FRENCH_AZERTY_LETTER_TO_HID_USAGE: Record<string, number> = {
+  a: BROWSER_CODE_TO_HID_USAGE.KeyQ,
+  m: BROWSER_CODE_TO_HID_USAGE.Semicolon,
+  q: BROWSER_CODE_TO_HID_USAGE.KeyA,
+  w: BROWSER_CODE_TO_HID_USAGE.KeyZ,
+  z: BROWSER_CODE_TO_HID_USAGE.KeyW,
+};
+
+function keyCodeForBrowserText(key: string): number | null {
+  const normalized = key.toLowerCase();
+  if (normalized < "a" || normalized > "z") {
+    return null;
+  }
+  return (
+    FRENCH_AZERTY_LETTER_TO_HID_USAGE[normalized] ??
+    KEY_TO_HID_USAGE[normalized] ??
+    null
+  );
+}
 
 export function keyPayloadForBrowserText(
   text: string,
@@ -191,13 +207,13 @@ export function keyPayloadForBrowserText(
     return null;
   }
   const character = characters[0];
-  const keyCode = KEY_TO_HID_USAGE[character.toLowerCase()];
+  const keyCode = keyCodeForBrowserText(character);
   if (keyCode == null) {
     return null;
   }
   return {
     keyCode,
-    modifiers: SHIFTED_CHARACTERS.has(character) ? MODIFIER_BITS.shift : 0,
+    modifiers: character === character.toUpperCase() ? MODIFIER_BITS.shift : 0,
   };
 }
 
@@ -213,7 +229,12 @@ export function keyboardModifiers(event: KeyboardEvent): number {
 
 export function keyCodeForKeyboardEvent(event: KeyboardEvent): number | null {
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  return KEY_TO_HID_USAGE[key] ?? BROWSER_CODE_TO_HID_USAGE[event.code] ?? null;
+  return (
+    FRENCH_AZERTY_LETTER_TO_HID_USAGE[key] ??
+    KEY_TO_HID_USAGE[key] ??
+    BROWSER_CODE_TO_HID_USAGE[event.code] ??
+    null
+  );
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {
