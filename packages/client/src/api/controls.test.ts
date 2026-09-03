@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bootSimulator } from "./controls";
+import { bootSimulator, startSimulatorScreenRecording } from "./controls";
 
 describe("controls", () => {
   afterEach(() => {
@@ -28,6 +28,29 @@ describe("controls", () => {
           androidEmulatorArgs: ["-no-snapshot"],
           androidDisableAudio: false,
         }),
+        method: "POST",
+      }),
+    );
+  });
+
+  it("starts screen recordings with the client-owned ID", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ ok: true, recordingId: "recording-id" }),
+        {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await startSimulatorScreenRecording("simulator-id", "recording-id");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/simulators/simulator-id/screen-recording/start",
+      expect.objectContaining({
+        body: JSON.stringify({ recordingId: "recording-id" }),
         method: "POST",
       }),
     );

@@ -2568,6 +2568,7 @@ export function AppShell({
     try {
       const response = await startSimulatorScreenRecording(
         selectedSimulator.udid,
+        crypto.randomUUID(),
       );
       setCaptureStatus(null);
       setRecordingNow(Date.now());

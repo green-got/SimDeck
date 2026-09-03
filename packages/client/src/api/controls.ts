@@ -179,10 +179,12 @@ export function recordSimulatorScreen(
 
 export function startSimulatorScreenRecording(
   udid: string,
+  recordingId: string,
 ): Promise<ScreenRecordingStartResponse> {
   return apiRequest<ScreenRecordingStartResponse>(
     `/api/simulators/${encodeURIComponent(udid)}/screen-recording/start`,
     {
+      body: JSON.stringify({ recordingId }),
       method: "POST",
     },
   );

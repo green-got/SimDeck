@@ -522,6 +522,12 @@ struct ScreenRecordingPayload {
     seconds: Option<f64>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScreenRecordingStartPayload {
+    recording_id: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateSimulatorPayload {
@@ -3504,18 +3510,37 @@ async fn screen_recording(
 async fn start_screen_recording(
     State(state): State<AppState>,
     Path(udid): Path<String>,
+    Json(payload): Json<ScreenRecordingStartPayload>,
 ) -> Result<Json<Value>, AppError> {
     if android::is_android_id(&udid) {
         return Err(AppError::bad_request(
             "Screen recording is currently supported for iOS simulators only.",
         ));
     }
-    let recording_id =
-        run_bridge_action(state, move |bridge| bridge.start_screen_recording(&udid)).await?;
+    let recording_id = validate_recording_id(&payload.recording_id)?;
+    let recording_id = run_bridge_action(state, move |bridge| {
+        bridge.start_screen_recording(&udid, &recording_id)
+    })
+    .await?;
     Ok(Json(json_value!({
         "ok": true,
         "recordingId": recording_id,
     })))
+}
+
+fn validate_recording_id(recording_id: &str) -> Result<String, AppError> {
+    let recording_id = recording_id.trim();
+    if recording_id.is_empty()
+        || recording_id.len() > 128
+        || !recording_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(AppError::bad_request(
+            "`recordingId` must be 1–128 URL-safe ASCII characters.",
+        ));
+    }
+    Ok(recording_id.to_owned())
 }
 
 async fn stop_screen_recording(
@@ -6724,12 +6749,12 @@ mod tests {
         process_identifier_from_accessibility_snapshot, resolved_stream_quality_limits,
         scroll_input_plan_for_udid, split_filter_values, stream_quality_profile,
         suppress_native_ax_translation_error, tap_point_from_snapshot, trim_tree_depth,
-        ui_application_foreground_score, AccessibilitySnapshotCache, AccessibilitySnapshotCacheKey,
-        AccessibilitySource, BatchStep, ControlMessage, ElementSelectorPayload, InspectorSession,
-        InspectorSessionTransport, ScrollInputBackend, ScrollUntilVisiblePayload,
-        StreamClientForegroundRegistry, StreamQualityLimits, StreamQualityPayload,
-        UIKitApplicationServiceDetails, SOURCE_FLUTTER, SOURCE_NATIVE_AX, SOURCE_NATIVE_SCRIPT,
-        SOURCE_REACT_NATIVE, SOURCE_SWIFTUI, SOURCE_UIKIT,
+        ui_application_foreground_score, validate_recording_id, AccessibilitySnapshotCache,
+        AccessibilitySnapshotCacheKey, AccessibilitySource, BatchStep, ControlMessage,
+        ElementSelectorPayload, InspectorSession, InspectorSessionTransport, ScrollInputBackend,
+        ScrollUntilVisiblePayload, StreamClientForegroundRegistry, StreamQualityLimits,
+        StreamQualityPayload, UIKitApplicationServiceDetails, SOURCE_FLUTTER, SOURCE_NATIVE_AX,
+        SOURCE_NATIVE_SCRIPT, SOURCE_REACT_NATIVE, SOURCE_SWIFTUI, SOURCE_UIKIT,
     };
     use crate::config::{UserAndroidConfig, UserConfig};
     use crate::inspector::PublishedInspector;
@@ -6752,6 +6777,16 @@ mod tests {
             selected: None,
             regex: None,
         }
+    }
+
+    #[test]
+    fn validates_client_owned_recording_ids() {
+        assert_eq!(
+            validate_recording_id(" recording-id ").unwrap(),
+            "recording-id"
+        );
+        assert!(validate_recording_id("  ").is_err());
+        assert!(validate_recording_id("recording/id").is_err());
     }
 
     #[test]

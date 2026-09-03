@@ -140,6 +140,7 @@ unsafe extern "C" {
     ) -> xcw_native_owned_bytes;
     pub fn xcw_native_start_screen_recording(
         udid: *const c_char,
+        recording_id: *const c_char,
         error_message: *mut *mut c_char,
     ) -> *mut c_char;
     pub fn xcw_native_stop_screen_recording(

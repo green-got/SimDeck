@@ -952,6 +952,7 @@ static NSString *XCWRuntimeDisplayName(NSDictionary *runtime, NSString *runtimeI
 }
 
 - (nullable NSString *)startScreenRecordingForSimulatorUDID:(NSString *)udid
+                                                recordingID:(NSString *)recordingID
                                                       error:(NSError * _Nullable __autoreleasing *)error {
     if (udid.length == 0) {
         if (error != NULL) {
@@ -960,8 +961,26 @@ static NSString *XCWRuntimeDisplayName(NSDictionary *runtime, NSString *runtimeI
         return nil;
     }
 
+    NSString *trimmedRecordingID = XCWTrimmedString(recordingID ?: @"");
+    if (trimmedRecordingID.length == 0) {
+        if (error != NULL) {
+            *error = [self.class errorWithDescription:@"Screen recording requires a recording ID." code:34];
+        }
+        return nil;
+    }
+
     NSMutableDictionary<NSString *, XCWScreenRecordingSession *> *sessions = XCWScreenRecordingSessions();
     @synchronized(sessions) {
+        XCWScreenRecordingSession *existingSession = sessions[trimmedRecordingID];
+        if (existingSession != nil) {
+            if ([existingSession.udid isEqualToString:udid]) {
+                return trimmedRecordingID;
+            }
+            if (error != NULL) {
+                *error = [self.class errorWithDescription:@"The recording ID is already in use by another simulator." code:34];
+            }
+            return nil;
+        }
         for (XCWScreenRecordingSession *session in sessions.objectEnumerator) {
             if ([session.udid isEqualToString:udid]) {
                 if (error != NULL) {
@@ -981,7 +1000,7 @@ static NSString *XCWRuntimeDisplayName(NSDictionary *runtime, NSString *runtimeI
     }
 
     XCWScreenRecordingSession *session = [[XCWScreenRecordingSession alloc] init];
-    session.identifier = NSUUID.UUID.UUIDString;
+    session.identifier = trimmedRecordingID;
     session.udid = udid;
     session.path = path;
     session.stdoutData = [NSMutableData data];
