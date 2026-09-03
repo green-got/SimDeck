@@ -402,19 +402,23 @@ or imported staging files.
 
 ## Evidence and chrome
 
-| Method | Path                                                         | Purpose                                        |
-| ------ | ------------------------------------------------------------ | ---------------------------------------------- |
-| `GET`  | `/api/simulators/{udid}/screenshot.png`                      | PNG screenshot, with `?bezel=true` for chrome  |
-| `POST` | `/api/simulators/{udid}/screen-recording`                    | MP4 recording with `{ "seconds": 5 }`          |
-| `POST` | `/api/simulators/{udid}/screen-recording/start`              | Start MP4 recording and return `recordingId`   |
-| `POST` | `/api/simulators/{udid}/screen-recording/{recordingId}/stop` | Stop recording and return MP4                  |
-| `GET`  | `/api/simulators/{udid}/pasteboard`                          | Get pasteboard text                            |
-| `POST` | `/api/simulators/{udid}/pasteboard`                          | Set pasteboard text with `{ "text": "hello" }` |
-| `GET`  | `/api/simulators/{udid}/logs`                                | Recent logs                                    |
-| `GET`  | `/api/simulators/{udid}/chrome-profile`                      | Screen and chrome geometry                     |
-| `GET`  | `/api/simulators/{udid}/chrome.png`                          | Rendered device chrome PNG                     |
-| `GET`  | `/api/simulators/{udid}/chrome-button/{button}`              | Rendered button sprite                         |
-| `GET`  | `/api/simulators/{udid}/screen-mask.png`                     | Rendered screen mask PNG                       |
+| Method | Path                                                         | Purpose                                                  |
+| ------ | ------------------------------------------------------------ | -------------------------------------------------------- |
+| `GET`  | `/api/simulators/{udid}/screenshot.png`                      | PNG screenshot, with `?bezel=true` for chrome            |
+| `POST` | `/api/simulators/{udid}/screen-recording`                    | MP4 recording with `{ "seconds": 5 }`                    |
+| `POST` | `/api/simulators/{udid}/screen-recording/start`              | Start MP4 recording for body `recordingId` and return it |
+| `POST` | `/api/simulators/{udid}/screen-recording/{recordingId}/stop` | Stop recording and return MP4                            |
+| `GET`  | `/api/simulators/{udid}/pasteboard`                          | Get pasteboard text                                      |
+| `POST` | `/api/simulators/{udid}/pasteboard`                          | Set pasteboard text with `{ "text": "hello" }`           |
+| `GET`  | `/api/simulators/{udid}/logs`                                | Recent logs                                              |
+| `GET`  | `/api/simulators/{udid}/chrome-profile`                      | Screen and chrome geometry                               |
+| `GET`  | `/api/simulators/{udid}/chrome.png`                          | Rendered device chrome PNG                               |
+| `GET`  | `/api/simulators/{udid}/chrome-button/{button}`              | Rendered button sprite                                   |
+| `GET`  | `/api/simulators/{udid}/screen-mask.png`                     | Rendered screen mask PNG                                 |
+
+Clients choose a 1–128 character URL-safe `recordingId` and reuse it when
+retrying an ambiguous start request. Starting an already-active recording with
+the same simulator and ID succeeds idempotently.
 
 Log query parameters:
 

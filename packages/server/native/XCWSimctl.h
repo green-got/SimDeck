@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
                                         durationSeconds:(NSTimeInterval)durationSeconds
                                                   error:(NSError * _Nullable * _Nullable)error;
 - (nullable NSString *)startScreenRecordingForSimulatorUDID:(NSString *)udid
+                                                recordingID:(NSString *)recordingID
                                                       error:(NSError * _Nullable * _Nullable)error;
 - (nullable NSData *)stopScreenRecordingWithID:(NSString *)recordingID
                                          error:(NSError * _Nullable * _Nullable)error;
