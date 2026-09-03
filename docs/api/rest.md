@@ -195,12 +195,15 @@ Performance query parameters:
 For normal clients, copy the browser behavior instead of hand-coding a raw decoder. The UI uses the WebRTC offer endpoint for live video. Android emulator IDs use the same WebRTC endpoint; their H.264 frames are produced from the emulator `-share-vid` display surface, not screenshot polling.
 
 The input/control WebSocket accepts JSON control messages with camelCase fields,
-including `touch`, `edgeTouch`, `multiTouch`, `key`, `button`, `crown`,
-`home`, `appSwitcher`, and rotation controls. Use short `touch` drag sequences
-for simulator scrolling. The legacy raw `scroll` control is parsed for
-compatibility but rejected because SimulatorKit scroll packets can destabilize
-iOS runtimes. Touch-like messages use normalized screen coordinates from `0.0`
-to `1.0`.
+including `touch`, `edgeTouch`, `multiTouch`, `key`, `semanticKey`, `text`,
+`button`, `crown`, `home`, `appSwitcher`, and rotation controls. Browser clients
+should send resolved printable output as `text` and modified printable keys as
+`semanticKey` so the simulator's keyboard layout does not reinterpret physical
+HID positions. Use `key` for layout-neutral navigation and editing keys. Use
+short `touch` drag sequences for simulator scrolling. The legacy raw `scroll`
+control is parsed for compatibility but rejected because SimulatorKit scroll
+packets can destabilize iOS runtimes. Touch-like messages use normalized screen
+coordinates from `0.0` to `1.0`.
 
 Minimal WebRTC request:
 

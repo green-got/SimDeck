@@ -95,6 +95,19 @@ final class RunnerTests: XCTestCase {
         applications[bundleId] = app
         app.typeText(text)
         payload = ["ok": true]
+      case "typeKey":
+        guard let bundleId = request.bundleId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !bundleId.isEmpty else {
+          throw RunnerError.invalidBundleId
+        }
+        guard let key = request.key, key.count == 1 else {
+          throw RunnerError.invalidKey
+        }
+        let modifiers = try keyModifierFlags(request.modifiers ?? 0)
+        let app = applications[bundleId] ?? XCUIApplication(bundleIdentifier: bundleId)
+        applications[bundleId] = app
+        app.typeKey(key, modifierFlags: modifiers)
+        payload = ["ok": true]
       case "shutdown":
         payload = ["ok": true]
         lifetime?.fulfill()
@@ -119,18 +132,37 @@ final class RunnerTests: XCTestCase {
 private struct Request: Decodable {
   let command: String
   let bundleId: String?
+  let key: String?
+  let modifiers: UInt?
   let text: String?
+}
+
+private func keyModifierFlags(_ rawValue: UInt) throws -> XCUIElement.KeyModifierFlags {
+  guard rawValue & ~0b10_1111 == 0 else {
+    throw RunnerError.invalidModifiers
+  }
+  var modifiers: XCUIElement.KeyModifierFlags = []
+  if rawValue & 0b000001 != 0 { modifiers.insert(.shift) }
+  if rawValue & 0b000010 != 0 { modifiers.insert(.control) }
+  if rawValue & 0b000100 != 0 { modifiers.insert(.option) }
+  if rawValue & 0b001000 != 0 { modifiers.insert(.command) }
+  if rawValue & 0b100000 != 0 { modifiers.insert(.function) }
+  return modifiers
 }
 
 private enum RunnerError: LocalizedError {
   case invalidBundleId
   case invalidText
+  case invalidKey
+  case invalidModifiers
   case invalidCommand
 
   var errorDescription: String? {
     switch self {
     case .invalidBundleId: return "command requires bundleId"
     case .invalidText: return "typeText requires non-empty text"
+    case .invalidKey: return "typeKey requires exactly one character"
+    case .invalidModifiers: return "typeKey contains unsupported modifiers"
     case .invalidCommand: return "unsupported runner command"
     }
   }

@@ -2201,6 +2201,26 @@ export function AppShell({
       }
       sendControl(selectedSimulator.udid, { type: "key", keyCode, modifiers });
     },
+    onShortcut: ({ key, keyCode, modifiers }) => {
+      if (!selectedSimulator) {
+        return;
+      }
+      if (isAndroidSimulator(selectedSimulator)) {
+        sendControl(selectedSimulator.udid, {
+          type: "key",
+          keyCode,
+          modifiers,
+        });
+        return;
+      }
+      sendControl(selectedSimulator.udid, {
+        type: "semanticKey",
+        key,
+        modifiers,
+        bundleId:
+          selectedSimulatorState?.foregroundApp?.bundleIdentifier ?? undefined,
+      });
+    },
     onText: (text) => {
       if (!selectedSimulator) {
         return;

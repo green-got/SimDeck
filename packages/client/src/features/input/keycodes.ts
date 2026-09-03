@@ -179,28 +179,6 @@ const KEY_TO_HID_USAGE: Record<string, number> = {
   ArrowUp: 82,
 };
 
-const SHIFTED_CHARACTERS = new Set(
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()_+{}|:"~<>?',
-);
-
-export function keyPayloadForBrowserText(
-  text: string,
-): { keyCode: number; modifiers: number } | null {
-  const characters = [...text];
-  if (characters.length !== 1) {
-    return null;
-  }
-  const character = characters[0];
-  const keyCode = KEY_TO_HID_USAGE[character.toLowerCase()];
-  if (keyCode == null) {
-    return null;
-  }
-  return {
-    keyCode,
-    modifiers: SHIFTED_CHARACTERS.has(character) ? MODIFIER_BITS.shift : 0,
-  };
-}
-
 export function keyboardModifiers(event: KeyboardEvent): number {
   let value = 0;
   if (event.shiftKey) value |= MODIFIER_BITS.shift;

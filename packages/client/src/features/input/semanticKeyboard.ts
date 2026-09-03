@@ -1,8 +1,4 @@
-import {
-  keyCodeForKeyboardEvent,
-  keyboardModifiers,
-  keyPayloadForBrowserText,
-} from "./keycodes";
+import { keyCodeForKeyboardEvent, keyboardModifiers } from "./keycodes";
 
 export interface KeyboardEventLike {
   altKey: boolean;
@@ -18,6 +14,11 @@ export interface KeyboardEventLike {
 interface SemanticKeyboardBatcherOptions {
   delayMs?: number;
   onKey: (payload: { keyCode: number; modifiers: number }) => void;
+  onShortcut: (payload: {
+    key: string;
+    keyCode: number;
+    modifiers: number;
+  }) => void;
   onText: (text: string) => void;
 }
 
@@ -59,6 +60,11 @@ export class SemanticKeyboardBatcher {
     this.options.onKey(payload);
   }
 
+  shortcut(payload: { key: string; keyCode: number; modifiers: number }): void {
+    this.flush();
+    this.options.onShortcut(payload);
+  }
+
   flush(): void {
     if (this.timer) {
       clearTimeout(this.timer);
@@ -90,10 +96,15 @@ export class SemanticKeyboardTranslator {
     if (keyCode == null) {
       return false;
     }
-    this.batcher.key({
-      keyCode,
-      modifiers: keyboardModifiers(event as KeyboardEvent),
-    });
+    const modifiers = keyboardModifiers(event as KeyboardEvent);
+    if (event.key.length === 1 && isPhysicalShortcut(event)) {
+      const key = /^[A-Z]$/.test(event.key)
+        ? event.key.toLowerCase()
+        : event.key;
+      this.batcher.shortcut({ key, keyCode, modifiers });
+    } else {
+      this.batcher.key({ keyCode, modifiers });
+    }
     return true;
   }
 
@@ -116,12 +127,7 @@ export class SemanticKeyboardTranslator {
       return true;
     }
     this.ignoredCompositionCommit = null;
-    const key = keyPayloadForBrowserText(data);
-    if (key) {
-      this.batcher.key(key);
-    } else {
-      this.batcher.text(data);
-    }
+    this.batcher.text(data);
     return true;
   }
 

@@ -612,6 +612,11 @@ pub(crate) enum ControlMessage {
         key_code: u16,
         modifiers: Option<u32>,
     },
+    SemanticKey {
+        key: String,
+        modifiers: u32,
+        bundle_id: Option<String>,
+    },
     Text {
         text: String,
         bundle_id: Option<String>,
@@ -3760,6 +3765,9 @@ async fn run_android_control_message(
                     key_code,
                     modifiers,
                 } => android.send_key(&udid, key_code, modifiers.unwrap_or(0)),
+                ControlMessage::SemanticKey { .. } => Err(AppError::bad_request(
+                    "Semantic key input is only available for iOS simulators.",
+                )),
                 ControlMessage::Text { text, .. } => android.type_text(&udid, &text),
                 ControlMessage::Button {
                     button,
@@ -4043,6 +4051,11 @@ async fn run_control_queue(
             ControlMessage::Text { text, bundle_id } => {
                 run_semantic_text_control(&state, &udid, text, bundle_id).await
             }
+            ControlMessage::SemanticKey {
+                key,
+                modifiers,
+                bundle_id,
+            } => run_semantic_key_control(&state, &udid, key, modifiers, bundle_id).await,
             message if session.is_tvos() => {
                 run_tvos_control_message(session.clone(), bridge.clone(), message, &mut tvos_touch)
                     .await
@@ -4149,6 +4162,9 @@ pub(crate) async fn run_control_message(
         ControlMessage::Text { .. } => Err(AppError::bad_request(
             "Semantic text input requires a state-aware control channel.",
         )),
+        ControlMessage::SemanticKey { .. } => Err(AppError::bad_request(
+            "Semantic key input requires a state-aware control channel.",
+        )),
         ControlMessage::Button {
             button,
             duration_ms,
@@ -4215,6 +4231,39 @@ pub(crate) async fn run_semantic_text_control(
             })?,
     };
     crate::semantic_text::type_text(udid, &bundle_id, &text)
+        .await
+        .map_err(AppError::native)
+}
+
+pub(crate) async fn run_semantic_key_control(
+    state: &AppState,
+    udid: &str,
+    key: String,
+    modifiers: u32,
+    bundle_id: Option<String>,
+) -> Result<(), AppError> {
+    if key.chars().count() != 1 {
+        return Err(AppError::bad_request(
+            "Semantic key input requires exactly one character.",
+        ));
+    }
+    if modifiers & !0b10_1111 != 0 {
+        return Err(AppError::bad_request(
+            "Semantic key input contains unsupported modifiers.",
+        ));
+    }
+
+    let bundle_id = match bundle_id.filter(|bundle_id| !bundle_id.trim().is_empty()) {
+        Some(bundle_id) => bundle_id,
+        None => foreground_app_for_simulator(state, udid)
+            .await
+            .map_err(AppError::native)?
+            .and_then(|foreground| foreground.bundle_identifier)
+            .ok_or_else(|| {
+                AppError::bad_request("No foreground application is available for key input.")
+            })?,
+    };
+    crate::semantic_text::type_key(udid, &bundle_id, &key, modifiers)
         .await
         .map_err(AppError::native)
 }
@@ -6676,7 +6725,7 @@ mod tests {
         scroll_input_plan_for_udid, split_filter_values, stream_quality_profile,
         suppress_native_ax_translation_error, tap_point_from_snapshot, trim_tree_depth,
         ui_application_foreground_score, AccessibilitySnapshotCache, AccessibilitySnapshotCacheKey,
-        AccessibilitySource, BatchStep, ElementSelectorPayload, InspectorSession,
+        AccessibilitySource, BatchStep, ControlMessage, ElementSelectorPayload, InspectorSession,
         InspectorSessionTransport, ScrollInputBackend, ScrollUntilVisiblePayload,
         StreamClientForegroundRegistry, StreamQualityLimits, StreamQualityPayload,
         UIKitApplicationServiceDetails, SOURCE_FLUTTER, SOURCE_NATIVE_AX, SOURCE_NATIVE_SCRIPT,
@@ -6703,6 +6752,26 @@ mod tests {
             selected: None,
             regex: None,
         }
+    }
+
+    #[test]
+    fn parses_layout_independent_semantic_key_controls() {
+        let message = serde_json::from_value::<ControlMessage>(json!({
+            "type": "semanticKey",
+            "key": "a",
+            "modifiers": 8,
+            "bundleId": "com.example.App",
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            message,
+            ControlMessage::SemanticKey {
+                key,
+                modifiers: 8,
+                bundle_id: Some(bundle_id),
+            } if key == "a" && bundle_id == "com.example.App"
+        ));
     }
 
     #[test]

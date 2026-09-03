@@ -21,6 +21,12 @@ export type ControlMessage =
   | ({ type: "edgeTouch" } & EdgeTouchPayload)
   | ({ type: "multiTouch" } & MultiTouchPayload)
   | ({ type: "key" } & KeyPayload)
+  | {
+      type: "semanticKey";
+      key: string;
+      modifiers: number;
+      bundleId?: string;
+    }
   | { type: "text"; text: string; bundleId?: string }
   | ({ type: "button" } & ButtonPayload)
   | ({ type: "crown" } & CrownPayload)
