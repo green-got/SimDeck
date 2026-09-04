@@ -3555,7 +3555,8 @@ async fn stop_screen_recording(
     let mp4 = run_bridge_action(state, move |bridge| {
         bridge.stop_screen_recording(&recording_id)
     })
-    .await?;
+    .await
+    .map_err(classify_stop_screen_recording_error)?;
     let mut headers = HeaderMap::new();
     headers.insert(header::CONTENT_TYPE, "video/mp4".parse().unwrap());
     headers.insert(
@@ -3563,6 +3564,17 @@ async fn stop_screen_recording(
         "no-cache, no-store, must-revalidate".parse().unwrap(),
     );
     Ok((StatusCode::OK, headers, mp4))
+}
+
+fn classify_stop_screen_recording_error(error: AppError) -> AppError {
+    match error {
+        AppError::Native(message)
+            if message == "No active simulator screen recording matched that ID." =>
+        {
+            AppError::not_found(message)
+        }
+        error => error,
+    }
 }
 
 fn validate_screen_recording_seconds(seconds: Option<f64>) -> Result<f64, AppError> {
@@ -6739,24 +6751,25 @@ mod tests {
         accessibility_point_snapshot, android_boot_options_from_config, attach_tree_metadata,
         available_sources_for_snapshot, available_sources_with_native_ax, best_inspector_session,
         boot_simulator_payload_from_body, chrome_devtools_source_for_session,
-        client_stats_foreground, compact_accessibility_snapshot, content_disposition_header,
-        decode_percent_encoded_utf8, element_matches_selector, first_matching_element,
-        inspector_available_sources, inspector_metadata, inspector_session_from_published,
-        inspector_session_score, is_inspector_agent_transport_path,
-        is_transient_native_ax_snapshot_error, logical_screen_size_from_display_pixels,
-        normalize_inspector_node, normalize_screen_point_from_snapshot,
-        normalized_gesture_coordinates, parse_lsof_tcp_listener,
-        process_identifier_from_accessibility_snapshot, resolved_stream_quality_limits,
-        scroll_input_plan_for_udid, split_filter_values, stream_quality_profile,
-        suppress_native_ax_translation_error, tap_point_from_snapshot, trim_tree_depth,
-        ui_application_foreground_score, validate_recording_id, AccessibilitySnapshotCache,
-        AccessibilitySnapshotCacheKey, AccessibilitySource, BatchStep, ControlMessage,
-        ElementSelectorPayload, InspectorSession, InspectorSessionTransport, ScrollInputBackend,
-        ScrollUntilVisiblePayload, StreamClientForegroundRegistry, StreamQualityLimits,
-        StreamQualityPayload, UIKitApplicationServiceDetails, SOURCE_FLUTTER, SOURCE_NATIVE_AX,
-        SOURCE_NATIVE_SCRIPT, SOURCE_REACT_NATIVE, SOURCE_SWIFTUI, SOURCE_UIKIT,
+        classify_stop_screen_recording_error, client_stats_foreground,
+        compact_accessibility_snapshot, content_disposition_header, decode_percent_encoded_utf8,
+        element_matches_selector, first_matching_element, inspector_available_sources,
+        inspector_metadata, inspector_session_from_published, inspector_session_score,
+        is_inspector_agent_transport_path, is_transient_native_ax_snapshot_error,
+        logical_screen_size_from_display_pixels, normalize_inspector_node,
+        normalize_screen_point_from_snapshot, normalized_gesture_coordinates,
+        parse_lsof_tcp_listener, process_identifier_from_accessibility_snapshot,
+        resolved_stream_quality_limits, scroll_input_plan_for_udid, split_filter_values,
+        stream_quality_profile, suppress_native_ax_translation_error, tap_point_from_snapshot,
+        trim_tree_depth, ui_application_foreground_score, validate_recording_id,
+        AccessibilitySnapshotCache, AccessibilitySnapshotCacheKey, AccessibilitySource, BatchStep,
+        ControlMessage, ElementSelectorPayload, InspectorSession, InspectorSessionTransport,
+        ScrollInputBackend, ScrollUntilVisiblePayload, StreamClientForegroundRegistry,
+        StreamQualityLimits, StreamQualityPayload, UIKitApplicationServiceDetails, SOURCE_FLUTTER,
+        SOURCE_NATIVE_AX, SOURCE_NATIVE_SCRIPT, SOURCE_REACT_NATIVE, SOURCE_SWIFTUI, SOURCE_UIKIT,
     };
     use crate::config::{UserAndroidConfig, UserConfig};
+    use crate::error::AppError;
     use crate::inspector::PublishedInspector;
     use crate::metrics::counters::ClientStreamStats;
     use crate::uikit_services::parse_application_service_line as parse_ui_application_service_line;
@@ -6787,6 +6800,15 @@ mod tests {
         );
         assert!(validate_recording_id("  ").is_err());
         assert!(validate_recording_id("recording/id").is_err());
+    }
+
+    #[test]
+    fn reports_a_missing_screen_recording_as_not_found() {
+        let error = classify_stop_screen_recording_error(AppError::native(
+            "No active simulator screen recording matched that ID.",
+        ));
+
+        assert!(matches!(error, AppError::NotFound(_)));
     }
 
     #[test]

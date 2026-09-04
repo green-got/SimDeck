@@ -407,7 +407,7 @@ or imported staging files.
 | `GET`  | `/api/simulators/{udid}/screenshot.png`                      | PNG screenshot, with `?bezel=true` for chrome            |
 | `POST` | `/api/simulators/{udid}/screen-recording`                    | MP4 recording with `{ "seconds": 5 }`                    |
 | `POST` | `/api/simulators/{udid}/screen-recording/start`              | Start MP4 recording for body `recordingId` and return it |
-| `POST` | `/api/simulators/{udid}/screen-recording/{recordingId}/stop` | Stop recording and return MP4                            |
+| `POST` | `/api/simulators/{udid}/screen-recording/{recordingId}/stop` | Stop recording and return MP4; returns 404 when absent   |
 | `GET`  | `/api/simulators/{udid}/pasteboard`                          | Get pasteboard text                                      |
 | `POST` | `/api/simulators/{udid}/pasteboard`                          | Set pasteboard text with `{ "text": "hello" }`           |
 | `GET`  | `/api/simulators/{udid}/logs`                                | Recent logs                                              |
