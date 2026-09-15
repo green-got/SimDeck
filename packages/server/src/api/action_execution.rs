@@ -355,12 +355,16 @@ fn selector_type_looks_interactive(value: &str) -> bool {
     .any(|needle| value.contains(needle))
 }
 
+/// A selector tap resolved only once fails whenever the target is briefly detached, for example
+/// while React Native remounts a field after input, so taps wait like `waitFor` by default.
+const DEFAULT_TAP_WAIT_TIMEOUT_MS: u64 = 5_000;
+
 async fn wait_for_tap_snapshot_match(
     state: AppState,
     udid: String,
     payload: WaitForPayload,
 ) -> Result<Value, AppError> {
-    let timeout_ms = payload.timeout_ms.unwrap_or(0);
+    let timeout_ms = payload.timeout_ms.unwrap_or(DEFAULT_TAP_WAIT_TIMEOUT_MS);
     let poll_ms = payload.poll_ms.unwrap_or(100).max(10);
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
     let allow_slow_fallback = payload.selector.index.is_none()
