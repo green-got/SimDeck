@@ -3901,12 +3901,12 @@ async fn handle_control_socket(state: AppState, udid: String, socket: WebSocket)
     let mut last_active_consumers = None;
     let mut last_camera_published_frames = None;
     let mut last_camera_consumed_frames = None;
-    state
+    let _surface_monitor = state
         .system_surfaces
-        .ensure_monitor(udid.clone(), state.device_events.clone());
-    state
+        .monitor(udid.clone(), state.device_events.clone());
+    let _file_monitor = state
         .files
-        .ensure_monitor(udid.clone(), state.device_events.clone());
+        .monitor(udid.clone(), state.device_events.clone());
     let _ = sender
         .send(Message::Text(
             json_value!({ "type": "ready", "udid": udid })
@@ -3916,9 +3916,10 @@ async fn handle_control_socket(state: AppState, udid: String, socket: WebSocket)
         .await;
     let (control_tx, control_rx) = mpsc::unbounded_channel::<ControlMessage>();
     let bridge = state.registry.bridge().clone();
-    if !session.is_tvos() {
+    let _text_runner_lease = (!session.is_tvos()).then(|| {
         crate::semantic_text::prewarm(udid.clone());
-    }
+        crate::semantic_text::retain(udid.clone())
+    });
     let control_task = task::spawn(run_control_queue(
         state.clone(),
         session,
