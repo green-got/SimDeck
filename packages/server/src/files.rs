@@ -56,8 +56,33 @@ struct StoredItem {
 
 #[derive(Clone, Default)]
 pub struct SimulatorFiles {
-    monitored: Arc<Mutex<HashSet<String>>>,
+    monitors: Arc<Mutex<FileMonitors>>,
     snapshots: Arc<Mutex<HashMap<String, HashMap<String, FileItem>>>>,
+}
+
+#[derive(Default)]
+struct FileMonitors {
+    clients: HashMap<String, usize>,
+    running: HashSet<String>,
+}
+
+/// Keeps the file-provider poll loop alive for one control connection; the loop
+/// stops once the last connection for the device drops.
+pub struct FileMonitor {
+    files: SimulatorFiles,
+    udid: String,
+}
+
+impl Drop for FileMonitor {
+    fn drop(&mut self) {
+        let mut monitors = self.files.monitors.lock().unwrap();
+        if let Some(count) = monitors.clients.get_mut(&self.udid) {
+            *count -= 1;
+            if *count == 0 {
+                monitors.clients.remove(&self.udid);
+            }
+        }
+    }
 }
 
 impl SimulatorFiles {
@@ -66,21 +91,39 @@ impl SimulatorFiles {
         ProviderStore::open_in_group_container(&group_container).await
     }
 
-    pub fn ensure_monitor(&self, udid: String, events: DeviceEventHub) {
-        if !self.monitored.lock().unwrap().insert(udid.clone()) {
-            return;
-        }
-        let files = self.clone();
-        tokio::spawn(async move {
-            loop {
-                if let Ok(store) = files.store_for_device(&udid).await {
-                    if let Ok(items) = store.list(None).await {
-                        files.publish_snapshot_changes(&udid, items, &events);
+    pub fn monitor(&self, udid: String, events: DeviceEventHub) -> FileMonitor {
+        let should_start = {
+            let mut monitors = self.monitors.lock().unwrap();
+            *monitors.clients.entry(udid.clone()).or_default() += 1;
+            monitors.running.insert(udid.clone())
+        };
+        if should_start {
+            let files = self.clone();
+            let udid = udid.clone();
+            tokio::spawn(async move {
+                while files.keep_monitoring(&udid) {
+                    if let Ok(store) = files.store_for_device(&udid).await {
+                        if let Ok(items) = store.list(None).await {
+                            files.publish_snapshot_changes(&udid, items, &events);
+                        }
                     }
+                    sleep(FILE_MONITOR_INTERVAL).await;
                 }
-                sleep(FILE_MONITOR_INTERVAL).await;
-            }
-        });
+            });
+        }
+        FileMonitor {
+            files: self.clone(),
+            udid,
+        }
+    }
+
+    fn keep_monitoring(&self, udid: &str) -> bool {
+        let mut monitors = self.monitors.lock().unwrap();
+        if monitors.clients.contains_key(udid) {
+            return true;
+        }
+        monitors.running.remove(udid);
+        false
     }
 
     pub async fn refresh_snapshot(&self, udid: &str) -> Result<(), FilesError> {

@@ -18,6 +18,7 @@ use tokio::time::{sleep, timeout, Instant};
 
 const ARTIFACT_BUILD_STRATEGY: &str = "iphonesimulator-sdk-v1";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(90);
+const RUNNER_LINGER: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 struct Artifact {
@@ -35,6 +36,71 @@ struct RunnerSession {
 struct RunnerManager {
     artifact: Mutex<Option<Artifact>>,
     sessions: Mutex<HashMap<String, Arc<Mutex<RunnerSession>>>>,
+    clients: std::sync::Mutex<HashMap<String, usize>>,
+}
+
+/// Keeps the XCTest runner for a device alive for one control connection. The
+/// runner is a long-lived `xcodebuild` per device; without a lease it is stopped
+/// once the last client has been gone for `RUNNER_LINGER`.
+pub struct TextRunnerLease {
+    udid: String,
+}
+
+impl Drop for TextRunnerLease {
+    fn drop(&mut self) {
+        let udid = std::mem::take(&mut self.udid);
+        if release_client(&udid) {
+            tokio::spawn(stop_if_unused(udid));
+        }
+    }
+}
+
+pub fn retain(udid: String) -> TextRunnerLease {
+    *manager()
+        .clients
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entry(udid.clone())
+        .or_default() += 1;
+    TextRunnerLease { udid }
+}
+
+fn release_client(udid: &str) -> bool {
+    let mut clients = manager()
+        .clients
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(count) = clients.get_mut(udid) else {
+        return false;
+    };
+    *count -= 1;
+    if *count == 0 {
+        clients.remove(udid);
+        return true;
+    }
+    false
+}
+
+fn has_clients(udid: &str) -> bool {
+    manager()
+        .clients
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains_key(udid)
+}
+
+async fn stop_if_unused(udid: String) {
+    sleep(RUNNER_LINGER).await;
+    let session = manager().sessions.lock().await.get(&udid).cloned();
+    let Some(session) = session else {
+        return;
+    };
+    let mut session = session.lock().await;
+    if has_clients(&udid) {
+        return;
+    }
+    stop_session(&mut session).await;
+    tracing::debug!("Stopped unused XCTest text runner for {udid}");
 }
 
 #[derive(Deserialize)]

@@ -38,7 +38,21 @@ pub struct SystemSurfaceRegistry {
 #[derive(Default)]
 struct SystemSurfaceRegistryState {
     current: HashMap<String, SystemSurface>,
+    clients: HashMap<String, usize>,
     monitoring: HashSet<String>,
+}
+
+/// Keeps the picker poll loop alive for one control connection. Polling costs a
+/// `simctl spawn` per tick per device, so it only runs while a client is attached.
+pub struct SystemSurfaceMonitor {
+    registry: SystemSurfaceRegistry,
+    udid: String,
+}
+
+impl Drop for SystemSurfaceMonitor {
+    fn drop(&mut self) {
+        self.registry.release(&self.udid);
+    }
 }
 
 impl SystemSurfaceRegistry {
@@ -61,26 +75,69 @@ impl SystemSurfaceRegistry {
         Ok(surface)
     }
 
-    pub fn ensure_monitor(&self, udid: String, events: DeviceEventHub) {
-        let should_start = self
-            .inner
+    pub fn monitor(&self, udid: String, events: DeviceEventHub) -> SystemSurfaceMonitor {
+        let should_start = {
+            let mut state = self
+                .inner
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *state.clients.entry(udid.clone()).or_default() += 1;
+            state.monitoring.insert(udid.clone())
+        };
+        if should_start {
+            let registry = self.clone();
+            let udid = udid.clone();
+            tokio::spawn(async move {
+                while registry.keep_monitoring(&udid) {
+                    if let Err(error) = registry.probe(&udid, &events).await {
+                        tracing::debug!(
+                            "Unable to inspect UIKit system surface for {udid}: {error}"
+                        );
+                    }
+                    tokio::time::sleep(SURFACE_POLL_INTERVAL).await;
+                }
+            });
+        }
+        SystemSurfaceMonitor {
+            registry: self.clone(),
+            udid,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_monitoring(&self, udid: &str) -> bool {
+        self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .monitoring
-            .insert(udid.clone());
-        if !should_start {
-            return;
-        }
+            .contains(udid)
+    }
 
-        let registry = self.clone();
-        tokio::spawn(async move {
-            loop {
-                if let Err(error) = registry.probe(&udid, &events).await {
-                    tracing::debug!("Unable to inspect UIKit system surface for {udid}: {error}");
-                }
-                tokio::time::sleep(SURFACE_POLL_INTERVAL).await;
+    fn release(&self, udid: &str) {
+        let mut state = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(count) = state.clients.get_mut(udid) {
+            *count -= 1;
+            if *count == 0 {
+                state.clients.remove(udid);
             }
-        });
+        }
+    }
+
+    // Decides under the same lock as `monitor` whether the loop stays alive, so a
+    // client reconnecting during the last tick cannot start a second loop.
+    fn keep_monitoring(&self, udid: &str) -> bool {
+        let mut state = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.clients.contains_key(udid) {
+            return true;
+        }
+        state.monitoring.remove(udid);
+        false
     }
 
     pub fn clear(&self, udid: &str, events: &DeviceEventHub) {
@@ -201,10 +258,15 @@ fn surface_session_id(udid: &str, details: &UIKitApplicationServiceDetails) -> S
 
 #[cfg(test)]
 mod tests {
-    use super::{is_document_picker_service, is_photo_picker_service, surface_session_id};
+    use super::{
+        is_document_picker_service, is_photo_picker_service, surface_session_id,
+        SystemSurfaceRegistry,
+    };
+    use crate::device_events::DeviceEventHub;
     use crate::uikit_services::{
         application_service_details_from_output, parse_application_service_line,
     };
+    use std::time::Duration;
 
     const IOS_18_DOCUMENT_PICKER_LIST_TRACE: &str =
         "  54831 - UIKitApplication:com.apple.DocumentsApp.DocumentsViewService[beef][rb-legacy]";
@@ -226,6 +288,32 @@ mod tests {
         spawn role = ui focal (1)
         pid = 54833
     "#;
+
+    #[tokio::test]
+    async fn monitor_stops_after_last_client_releases() {
+        let registry = SystemSurfaceRegistry::default();
+        let events = DeviceEventHub::default();
+        let first = registry.monitor("device-a".to_owned(), events.clone());
+        let second = registry.monitor("device-a".to_owned(), events.clone());
+        assert!(registry.is_monitoring("device-a"));
+
+        drop(first);
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert!(registry.is_monitoring("device-a"));
+
+        drop(second);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while registry.is_monitoring("device-a") {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "monitor kept polling"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        let _third = registry.monitor("device-a".to_owned(), events);
+        assert!(registry.is_monitoring("device-a"));
+    }
 
     #[test]
     fn recognizes_focal_documents_view_service_trace() {
